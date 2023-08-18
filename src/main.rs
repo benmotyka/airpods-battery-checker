@@ -1,34 +1,42 @@
-#![allow(unused)]
+use std::error::Error;
 
-use clap::{Parser, Subcommand};
-use std::thread;
-use std::time::Duration;
-use std::process::Command;
+use bluest::Adapter;
+use tracing::info;
+use tracing::metadata::LevelFilter;
 
-#[derive(Parser)]
-#[command(name = "AirPods battery checker")]
-#[command(about = "Short about", long_about = "Long about")]
-struct Cli {
-    #[clap(short, long, default_value = "1")]
-    interval: u8,
-}
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let adapter = Adapter::default().await.ok_or("Bluetooth adapter not found")?;
+    adapter.wait_available().await?;
 
-fn main() {
-    let args = Cli::parse();
+    println!("getting connected devices");
+    let devices = adapter.connected_devices().await?;
+    for device in devices {
+        println!("found {:?}", device);
+        adapter.connect_device(&device).await?;
+        let services = device.discover_services().await?;
+        println!("services: {:?}", services);
+        for service in services {
+            println!("1");
+            println!("  {:?}", service);
+            let characteristics = service.discover_characteristics().await?;
+            for characteristic in characteristics {
+                println!("    {:?}", characteristic);
+                let props = characteristic.properties().await?;
+                println!("      props: {:?}", props);
+                if props.read {
+                    println!("      value: {:?}", characteristic.read().await);
+                }
 
-    loop {
-        clear_console();
-        println!("Battery status:");
-
-        thread::sleep(Duration::from_secs(args.interval as u64));
+                let descriptors = characteristic.discover_descriptors().await?;
+                for descriptor in descriptors {
+                    println!("2");
+                    println!("      {:?}: {:?}", descriptor, descriptor.read().await);
+                }
+            }
+        }
     }
-    println!("{}", args.interval);
-}
+    println!("done");
 
-fn clear_console() {
-    if cfg!(target_os = "windows") {
-        let _ = Command::new("cmd").arg("/c").arg("cls").status();
-    } else {
-        let _ = Command::new("clear").status();
-    }
+    Ok(())
 }
