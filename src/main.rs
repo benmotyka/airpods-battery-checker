@@ -1,8 +1,6 @@
 use std::error::Error;
 
 use bluest::Adapter;
-use tracing::info;
-use tracing::metadata::LevelFilter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -11,13 +9,16 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     println!("getting connected devices");
     let devices = adapter.connected_devices().await?;
+    if devices.is_empty() {
+        println!("no connected devices");
+        return Ok(());
+    }
     for device in devices {
-        println!("found {:?}", device);
+        println!("found {}, {:?}", device.name().unwrap(), device);
         adapter.connect_device(&device).await?;
         let services = device.discover_services().await?;
         println!("services: {:?}", services);
         for service in services {
-            println!("1");
             println!("  {:?}", service);
             let characteristics = service.discover_characteristics().await?;
             for characteristic in characteristics {
@@ -30,13 +31,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
                 let descriptors = characteristic.discover_descriptors().await?;
                 for descriptor in descriptors {
-                    println!("2");
                     println!("      {:?}: {:?}", descriptor, descriptor.read().await);
                 }
             }
         }
     }
-    println!("done");
 
     Ok(())
 }
